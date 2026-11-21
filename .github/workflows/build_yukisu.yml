@@ -1,0 +1,52 @@
+name: Build YukiSU Kernel for Marble
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout Kernel Source
+        uses: actions/checkout@v4
+        with:
+          depth: 1
+
+      - name: Install Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y bc bison build-essential ccache curl flex git libssl-dev libelf-dev python3 zip zstd
+      - name: Setup Neutron Clang
+        run: |
+          mkdir -p $HOME/clang
+          cd $HOME/clang
+          bash <(curl -s "https://raw.githubusercontent.com/Neutron-Toolchains/antman/main/antman") -S
+      - name: Integrate Official YukiSU
+        run: |
+          curl -LSs "https://raw.githubusercontent.com/Rouyashiki/YukiSU/main/kernel/setup.sh" | bash -s main
+          echo "=== YukiSU Kconfig 选项预览 ==="
+          cat drivers/kernelsu/Kconfig || true
+          
+          CONFIG_FILE="arch/arm64/configs/marble_defconfig"
+          echo "CONFIG_KSU=y" >> $CONFIG_FILE
+          echo "CONFIG_KSU_MANUAL_HOOK=y" >> $CONFIG_FILE
+          echo "# CONFIG_KSU_LKM is not set" >> $CONFIG_FILE
+      - name: Build Kernel Image, DTB and DTBO
+        run: |
+          export PATH="$HOME/clang/bin:$PATH"
+          make O=out ARCH=arm64 CC=clang LLVM=1 LLVM_IAS=1 CROSS_COMPILE=aarch64-linux-gnu- marble_defconfig
+          make -j$(nproc --all) O=out ARCH=arm64 CC=clang LLVM=1 LLVM_IAS=1 CROSS_COMPILE=aarch64-linux-gnu- Image dtbo.img dtbs
+      - name: Pack AnyKernel3
+        run: |
+          git clone --depth=1 https://github.com/osm0sis/AnyKernel3.git
+          rm -rf AnyKernel3/.git AnyKernel3/README.md
+          cp out/arch/arm64/boot/Image AnyKernel3/
+          cp out/arch/arm64/boot/dtbo.img AnyKernel3/ || true
+          find out/arch/arm64/boot/dts -name '*.dtb' -exec cat {} + > AnyKernel3/dtb
+          sed -i 's/do.devicecheck=1/do.devicecheck=0/g' AnyKernel3/anykernel.sh
+          cd AnyKernel3 && zip -r9 ../YukiSU-marble-Kernel.zip *
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: YukiSU-marble-Kernel
+          path: YukiSU-marble-Kernel.zip
