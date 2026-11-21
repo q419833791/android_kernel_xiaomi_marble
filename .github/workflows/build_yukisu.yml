@@ -44,19 +44,17 @@ jobs:
           echo "CONFIG_KSU_MANUAL_HOOK=y" >> $CONFIG_FILE
           echo "# CONFIG_KSU_LKM is not set" >> $CONFIG_FILE
 
-      - name: Build Kernel Image, DTB and DTBO
+      - name: Build Kernel Image
         run: |
           export PATH="$HOME/clang/bin:$PATH"
           make O=out ARCH=arm64 CC=clang LLVM=1 LLVM_IAS=1 CROSS_COMPILE=aarch64-linux-gnu- marble_defconfig
-          make -j$(nproc --all) O=out ARCH=arm64 CC=clang LLVM=1 LLVM_IAS=1 CROSS_COMPILE=aarch64-linux-gnu- Image dtbo.img dtbs
+          make -j$(nproc --all) O=out ARCH=arm64 CC=clang LLVM=1 LLVM_IAS=1 CROSS_COMPILE=aarch64-linux-gnu- Image
 
       - name: Pack AnyKernel3
         run: |
           git clone --depth=1 https://github.com/osm0sis/AnyKernel3.git
           rm -rf AnyKernel3/.git AnyKernel3/README.md
           cp out/arch/arm64/boot/Image AnyKernel3/
-          cp out/arch/arm64/boot/dtbo.img AnyKernel3/ || true
-          find out/arch/arm64/boot/dts -name '*.dtb' -exec cat {} + > AnyKernel3/dtb
           sed -i 's/do.devicecheck=1/do.devicecheck=0/g' AnyKernel3/anykernel.sh
           cd AnyKernel3 && zip -r9 ../YukiSU-marble-Kernel.zip *
 
@@ -65,3 +63,4 @@ jobs:
         with:
           name: YukiSU-marble-Kernel
           path: YukiSU-marble-Kernel.zip
+
